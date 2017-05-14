@@ -39,7 +39,7 @@ class YOLO_TF:
 			if argvs[i] == '-disp_console' :
 				if argvs[i+1] == '1' :self.disp_console = True
 				else : self.disp_console = False
-				
+	＃build yolo model			
 	def build_networks(self):
 		if self.disp_console : print "Building YOLO_small graph..."
 		self.x = tf.placeholder('float32',[None,448,448,3])
@@ -80,7 +80,7 @@ class YOLO_TF:
 		self.saver = tf.train.Saver()
 		self.saver.restore(self.sess,self.weights_file)
 		if self.disp_console : print "Loading complete!" + '\n'
-
+	#redesign the basic layers
 	def conv_layer(self,idx,inputs,filters,size,stride):
 		channels = inputs.get_shape()[3]
 		weight = tf.Variable(tf.truncated_normal([size,size,int(channels),filters], stddev=0.1))
@@ -151,12 +151,16 @@ class YOLO_TF:
 		self.boxes, self.probs = self.interpret_output(net_output[0])
 		img = cv2.imread('person.jpg')
 		self.show_results(self.boxes,img)
-
+	#getting bbox from fc output feaure
 	def interpret_output(self,output):
 		probs = np.zeros((7,7,2,20))
+		#class score
 		class_probs = np.reshape(output[0:980],(7,7,20))
+		#scale score
 		scales = np.reshape(output[980:1078],(7,7,2))
+		#bbox positions
 		boxes = np.reshape(output[1078:],(7,7,2,4))
+		#starting pixel positions
 		offset = np.transpose(np.reshape(np.array([np.arange(7)]*14),(2,7,7)),(1,2,0))
 
 		boxes[:,:,:,0] += offset
@@ -173,13 +177,14 @@ class YOLO_TF:
 		for i in range(2):
 			for j in range(20):
 				probs[:,:,i,j] = np.multiply(class_probs[:,:,j],scales[:,:,i])
-
+		#find the bboxes can be  considered as bbox
 		filter_mat_probs = np.array(probs>=self.threshold,dtype='bool')
 		filter_mat_boxes = np.nonzero(filter_mat_probs)
 		boxes_filtered = boxes[filter_mat_boxes[0],filter_mat_boxes[1],filter_mat_boxes[2]]
 		probs_filtered = probs[filter_mat_probs]
 		classes_num_filtered = np.argmax(filter_mat_probs,axis=3)[filter_mat_boxes[0],filter_mat_boxes[1],filter_mat_boxes[2]] 
 
+		#make sure neiboring ones merge
 		argsort = np.array(np.argsort(probs_filtered))[::-1]
 		boxes_filtered = boxes_filtered[argsort]
 		probs_filtered = probs_filtered[argsort]
